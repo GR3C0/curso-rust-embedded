@@ -34,12 +34,13 @@ fn main() -> ! {
 
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let _peripherals = esp_hal::init(config);
-
+    let mut led = Output::new(_peripherals.GPIO2);
     
 
 
     loop {
         info!("Hello world!");
+        let delay = esp_hal::delay();
         let delay_start = Instant::now();
         while delay_start.elapsed() < Duration::from_millis(500) {}
     }
