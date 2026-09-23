@@ -1,0 +1,431 @@
+<title>Rust en el ESP32</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+  :root {
+    --paper: #F3F5F2;
+    --panel: #FFFFFF;
+    --ink: #18202B;
+    --muted: #5A6573;
+    --rule: #D5DAD4;
+    --copper: #A8561C;
+    --copper-soft: #F4E4D6;
+    --signal: #2A7A56;
+    --signal-soft: #DDEFE5;
+    --danger: #B3372E;
+    --code-bg: #EAEDE9;
+    --display: "Chakra Petch", "Avenir Next Condensed", system-ui, sans-serif;
+    --body: "IBM Plex Sans", -apple-system, "Segoe UI", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --paper: #0F1418; --panel: #161D23; --ink: #E2E7E3; --muted: #97A2AC;
+      --rule: #2B343C; --copper: #E3904F; --copper-soft: #3A2718;
+      --signal: #56C28F; --signal-soft: #173226; --danger: #EE7B70; --code-bg: #1C242B;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --paper: #0F1418; --panel: #161D23; --ink: #E2E7E3; --muted: #97A2AC;
+    --rule: #2B343C; --copper: #E3904F; --copper-soft: #3A2718;
+    --signal: #56C28F; --signal-soft: #173226; --danger: #EE7B70; --code-bg: #1C242B;
+  }
+
+  body {
+    background: var(--paper); color: var(--ink);
+    font-family: var(--body); font-size: 16px; line-height: 1.6;
+    padding-inline: 16px; padding-block: 0 64px;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+
+  header.top {
+    display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; justify-content: space-between;
+    padding-block: 20px 16px; border-bottom: 1px solid var(--rule);
+  }
+  header.top .name { font-family: var(--display); font-weight: 600; font-size: 20px; letter-spacing: .02em; }
+  header.top .name span { color: var(--copper); }
+  .board { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+
+  .layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 48px; padding-top: 32px; }
+  @media (max-width: 860px) { .layout { grid-template-columns: minmax(0, 1fr); gap: 24px; } }
+
+  aside { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; }
+  @media (max-width: 860px) { aside { position: static; } }
+  aside h2 {
+    font-family: var(--display); font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .12em; color: var(--muted); margin: 0 0 12px;
+  }
+  ol.road { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  ol.road li { display: grid; grid-template-columns: 28px 1fr; gap: 8px; padding: 8px 10px; border-radius: 6px; font-size: 14px; line-height: 1.35; }
+  ol.road li .n { font-family: var(--mono); font-size: 12px; color: var(--muted); padding-top: 2px; }
+  ol.road li small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  ol.road li.now { background: var(--copper-soft); }
+  ol.road li.now .n, ol.road li.now strong { color: var(--copper); }
+  ol.road li.later { opacity: .72; }
+  .need { font-family: var(--mono); font-size: 11px; color: var(--copper); }
+
+  main { max-width: 70ch; min-width: 0; }
+  .eyebrow { font-family: var(--mono); font-size: 12.5px; color: var(--copper); letter-spacing: .04em; }
+  h1 { font-family: var(--display); font-weight: 600; font-size: clamp(30px, 5vw, 42px); line-height: 1.1; margin: 6px 0 14px; text-wrap: balance; }
+  h2.sec {
+    font-family: var(--display); font-weight: 600; font-size: 24px; line-height: 1.2;
+    margin: 56px 0 12px; padding-top: 18px; border-top: 1px solid var(--rule); text-wrap: balance;
+  }
+  h2.sec .k { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--muted); display: block; margin-bottom: 4px; letter-spacing: .04em; }
+  h3 { font-size: 17px; margin: 28px 0 8px; }
+  p { margin: 0 0 14px; }
+  .lead { font-size: 18px; color: var(--muted); }
+  a { color: var(--copper); }
+  strong { font-weight: 600; }
+
+  code { font-family: var(--mono); font-size: .88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre {
+    font-family: var(--mono); font-size: 13.5px; line-height: 1.55; background: var(--code-bg);
+    padding: 14px 16px; border-radius: 8px; overflow-x: auto; margin: 0 0 16px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .c { color: var(--muted); }
+  .kw { color: var(--copper); }
+  pre.err { background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--danger); }
+  pre.err .e { color: var(--danger); font-weight: 500; }
+  pre.term::before { content: "fish"; display: block; font-size: 11px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; }
+
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; margin: 20px 0 8px; }
+  .facts div { background: var(--panel); padding: 12px 14px; }
+  .facts dt { font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .facts dd { margin: 2px 0 0; font-family: var(--mono); font-size: 14px; }
+
+  figure { margin: 22px 0 22px; background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 18px 16px 12px; }
+  figure .scroll { overflow-x: auto; }
+  figure svg { display: block; width: 100%; height: auto; min-width: 560px; color: var(--ink); }
+  figcaption { font-size: 13.5px; color: var(--muted); margin-top: 10px; line-height: 1.5; }
+  svg text { font-family: var(--mono); font-size: 12px; fill: currentColor; }
+  svg .mut { fill: var(--muted); }
+  svg .cop { fill: var(--copper); }
+  svg .sig { fill: var(--signal); }
+  svg .box { fill: var(--panel); stroke: currentColor; stroke-width: 1.4; }
+  svg .box-soft { fill: var(--code-bg); stroke: var(--rule); stroke-width: 1.2; }
+  svg .box-cop { fill: var(--copper-soft); stroke: var(--copper); stroke-width: 1.6; }
+  svg .box-sig { fill: var(--signal-soft); stroke: var(--signal); stroke-width: 1.6; }
+  svg .wire { stroke: currentColor; stroke-width: 1.6; fill: none; }
+  svg .wire-cop { stroke: var(--copper); stroke-width: 2; fill: none; }
+  svg .wire-sig { stroke: var(--signal); stroke-width: 2.2; fill: none; }
+  svg .wire-dash { stroke: var(--muted); stroke-width: 1.4; fill: none; stroke-dasharray: 4 4; }
+  svg .x { stroke: var(--danger); stroke-width: 2.4; }
+  svg .xt { fill: var(--danger); }
+
+  table.lines { width: 100%; border-collapse: collapse; font-size: 14.5px; margin: 12px 0 20px; }
+  .tablewrap { overflow-x: auto; }
+  table.lines td { padding: 10px 10px; border-top: 1px solid var(--rule); vertical-align: top; }
+  table.lines td:first-child { white-space: nowrap; width: 1%; }
+  table.lines tr:first-child td { border-top: none; }
+
+  .note { background: var(--signal-soft); border-radius: 8px; padding: 12px 16px; margin: 18px 0; font-size: 15px; }
+  .note strong { color: var(--signal); }
+
+  ol.steps { padding-left: 0; list-style: none; counter-reset: s; display: grid; gap: 14px; margin: 16px 0 20px; }
+  ol.steps > li { counter-increment: s; display: grid; grid-template-columns: 34px 1fr; gap: 10px; }
+  ol.steps > li::before {
+    content: counter(s); font-family: var(--display); font-weight: 600; font-size: 15px;
+    width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--ink); color: var(--paper); margin-top: 1px;
+  }
+
+  details { border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); margin: 0 0 8px; }
+  details summary { cursor: pointer; padding: 10px 14px; font-weight: 500; font-size: 15px; list-style-position: inside; }
+  details summary:focus-visible { outline: 2px solid var(--copper); outline-offset: 2px; border-radius: 8px; }
+  details[open] summary { border-bottom: 1px solid var(--rule); }
+  details .in { padding: 12px 14px 4px; font-size: 15px; }
+
+  .ask { margin-top: 28px; padding: 16px 18px; border: 1.5px dashed var(--copper); border-radius: 10px; }
+  .ask p:last-child { margin: 0; }
+  footer { margin-top: 56px; font-size: 13px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="name">Rust en el <span>ESP32</span></div>
+    <div class="board">ESP32 rev v3.1 · Xtensa LX6 ×2 · 240 MHz · 4 MB flash · esp-hal 1.2.2</div>
+  </header>
+
+  <div class="layout">
+    <aside>
+      <h2>Hoja de ruta</h2>
+      <ol class="road">
+        <li class="now"><span class="n">01</span><span><strong>Encender un LED</strong><small>GPIO, registros, no_std, ownership</small></span></li>
+        <li class="later"><span class="n">02</span><span>Un botón y una interrupción<small>entradas, pull-up, estado compartido</small></span></li>
+        <li class="later"><span class="n">03</span><span>PWM: brillo y un servo<small>temporizadores LEDC, traits de embedded-hal</small></span></li>
+        <li class="later"><span class="n">04</span><span>Varios servos, un brazo<small>tus propios structs, genéricos</small></span></li>
+        <li class="later"><span class="n">05</span><span>Motores DC<small>puente H</small><span class="need">necesita driver TB6612</span></span></li>
+        <li class="later"><span class="n">06</span><span>Sensores<small>I2C, ultrasonidos</small><span class="need">necesita HC-SR04 / MPU6050</span></span></li>
+        <li class="later"><span class="n">07</span><span>Async con embassy<small>varias tareas a la vez</small></span></li>
+        <li class="later"><span class="n">08</span><span>Robot que esquiva obstáculos<small>todo junto</small></span></li>
+      </ol>
+    </aside>
+
+    <main>
+      <div class="eyebrow">Lección 01 · lecciones/01-blink</div>
+      <h1>Encender un LED</h1>
+      <p class="lead">Objetivo: el LED azul de la placa parpadea cada medio segundo y el monitor serie dice si está encendido o apagado. Parece poco, pero para llegar ahí hay que entender cómo arranca un programa sin sistema operativo, cómo se controla un pin y por qué Rust no te deja usarlo dos veces.</p>
+
+      <dl class="facts">
+        <div><dt>Chip</dt><dd>ESP32 (Xtensa)</dd></div>
+        <div><dt>Pin del LED</dt><dd>GPIO2 <span class="c">(por confirmar)</span></dd></div>
+        <div><dt>Tensión lógica</dt><dd>3,3 V</dd></div>
+        <div><dt>Puerto</dt><dd>cu.usbserial-0001</dd></div>
+      </dl>
+
+      <!-- ─────────────── 1 ─────────────── -->
+      <h2 class="sec"><span class="k">1 · hardware</span>Qué es un GPIO</h2>
+      <p>GPIO es <em>General Purpose Input/Output</em>: un pin que tu programa decide si es <strong>salida</strong> (el chip pone 3,3 V o 0 V en él) o <strong>entrada</strong> (el chip lee qué tensión le llega). El ESP32 tiene 34.</p>
+      <p>Y aquí viene la idea central de todo lo que haremos: <strong>el hardware se controla escribiendo en memoria</strong>. Ciertas direcciones no son RAM, son <em>registros</em>. Cada bit está cableado a algo físico. Escribir un <code>1</code> en el bit 2 de cierto registro hace que salga corriente por el pin 2.</p>
+
+      <figure>
+        <div class="scroll">
+        <svg viewBox="0 0 760 270" role="img" aria-label="La CPU escribe 1 en el bit 2 del registro GPIO_OUT_W1TS en la dirección 0x3FF44008; ese bit pone el pin GPIO2 a 3,3 voltios, la corriente pasa por una resistencia y el LED y vuelve a masa.">
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+            <marker id="ahc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#A8561C"/></marker>
+          </defs>
+
+          <!-- CPU -->
+          <rect class="box" x="10" y="40" width="120" height="70" rx="6"/>
+          <text x="70" y="70" text-anchor="middle">CPU</text>
+          <text x="70" y="88" text-anchor="middle" class="mut">tu código</text>
+
+          <!-- arrow cpu -> register -->
+          <line class="wire-cop" x1="130" y1="75" x2="200" y2="75" marker-end="url(#ahc)"/>
+          <text x="165" y="64" text-anchor="middle" class="cop">escribe</text>
+          <text x="165" y="96" text-anchor="middle" class="mut">1 &lt;&lt; 2</text>
+
+          <!-- register -->
+          <text x="210" y="28" class="mut">GPIO_OUT_W1TS · 0x3FF4_4008</text>
+          <g>
+            <rect class="box-soft" x="210" y="40" width="336" height="70" rx="4"/>
+            <!-- bits 7..0 shown, others elided -->
+            <text x="228" y="82" class="mut">31 … 8</text>
+            <rect class="box" x="290" y="52" width="30" height="46"/><text x="305" y="80" text-anchor="middle">0</text>
+            <rect class="box" x="322" y="52" width="30" height="46"/><text x="337" y="80" text-anchor="middle">0</text>
+            <rect class="box" x="354" y="52" width="30" height="46"/><text x="369" y="80" text-anchor="middle">0</text>
+            <rect class="box" x="386" y="52" width="30" height="46"/><text x="401" y="80" text-anchor="middle">0</text>
+            <rect class="box" x="418" y="52" width="30" height="46"/><text x="433" y="80" text-anchor="middle">0</text>
+            <rect class="box-cop" x="450" y="52" width="30" height="46"/><text x="465" y="80" text-anchor="middle" class="cop">1</text>
+            <rect class="box" x="482" y="52" width="30" height="46"/><text x="497" y="80" text-anchor="middle">0</text>
+            <rect class="box" x="514" y="52" width="30" height="46"/><text x="529" y="80" text-anchor="middle">0</text>
+            <text x="305" y="124" text-anchor="middle" class="mut">7</text>
+            <text x="465" y="124" text-anchor="middle" class="cop">bit 2</text>
+            <text x="529" y="124" text-anchor="middle" class="mut">0</text>
+          </g>
+
+          <!-- bit 2 down to pin -->
+          <line class="wire-cop" x1="465" y1="130" x2="465" y2="170" marker-end="url(#ahc)"/>
+
+          <!-- pin -->
+          <rect class="box-sig" x="420" y="172" width="90" height="40" rx="4"/>
+          <text x="465" y="197" text-anchor="middle" class="sig">GPIO2</text>
+          <text x="465" y="232" text-anchor="middle" class="sig">3,3 V</text>
+
+          <!-- circuit: pin -> resistor -> led -> gnd -->
+          <line class="wire-sig" x1="510" y1="192" x2="560" y2="192"/>
+          <!-- resistor zigzag -->
+          <polyline class="wire-sig" points="560,192 566,182 578,202 590,182 602,202 614,182 620,192"/>
+          <text x="590" y="170" text-anchor="middle" class="mut">R</text>
+          <line class="wire-sig" x1="620" y1="192" x2="650" y2="192"/>
+          <!-- LED triangle -->
+          <polygon points="650,178 650,206 674,192" fill="none" stroke="var(--signal)" stroke-width="2"/>
+          <line class="wire-sig" x1="674" y1="178" x2="674" y2="206"/>
+          <line stroke="var(--signal)" stroke-width="1.6" x1="664" y1="172" x2="674" y2="160"/>
+          <line stroke="var(--signal)" stroke-width="1.6" x1="672" y1="176" x2="682" y2="164"/>
+          <text x="662" y="232" text-anchor="middle" class="mut">LED</text>
+          <line class="wire-sig" x1="674" y1="192" x2="720" y2="192"/>
+          <line class="wire-sig" x1="720" y1="192" x2="720" y2="222"/>
+          <!-- gnd -->
+          <line class="wire" x1="706" y1="222" x2="734" y2="222"/>
+          <line class="wire" x1="711" y1="228" x2="729" y2="228"/>
+          <line class="wire" x1="716" y1="234" x2="724" y2="234"/>
+          <text x="720" y="254" text-anchor="middle" class="mut">GND</text>
+
+          <!-- "on the board" bracket -->
+          <text x="620" y="130" text-anchor="middle" class="mut">ya soldado en tu placa</text>
+          <line class="wire-dash" x1="540" y1="140" x2="740" y2="140"/>
+        </svg>
+        </div>
+        <figcaption>Un bit de un registro es un interruptor físico. La CPU escribe <code>1 &lt;&lt; 2</code> (el número 4: solo el bit 2 encendido) en la dirección <code>0x3FF4_4008</code>, y el pin GPIO2 pasa a 3,3 V. La resistencia limita la corriente para que el LED no se queme. En tu placa ese circuito ya viene soldado.</figcaption>
+      </figure>
+
+      <h3>¿Por qué un registro "W1TS" y no uno normal?</h3>
+      <p>Existe un registro <code>GPIO_OUT</code> (<code>0x3FF4_4004</code>) con los 32 pines de golpe. Para encender solo el pin 2 tendrías que <em>leerlo</em>, poner el bit 2 a 1 y <em>escribirlo</em>. Si entre la lectura y la escritura el otro núcleo o una interrupción cambia otro pin, lo pisas. <code>W1TS</code> significa <em>write 1 to set</em>: los bits a 1 se encienden y los bits a 0 <strong>no se tocan</strong>. Una sola escritura, sin carreras. Su pareja <code>W1TC</code> (<code>0x3FF4_400C</code>, <em>write 1 to clear</em>) apaga.</p>
+
+      <p>En Rust, a pelo, sería esto:</p>
+<pre><code><span class="kw">const</span> GPIO_OUT_W1TS: *<span class="kw">mut</span> u32 = 0x3FF4_4008 <span class="kw">as</span> *<span class="kw">mut</span> u32;
+
+<span class="kw">unsafe</span> { GPIO_OUT_W1TS.write_volatile(1 &lt;&lt; 2) }  <span class="c">// GPIO2 a 3,3 V</span></code></pre>
+      <p>Dos cosas nuevas. <code>unsafe</code>: el compilador no puede saber si esa dirección es válida, así que tú firmas que lo es. <code>write_volatile</code>: una escritura normal en una dirección que nadie lee después, el optimizador la puede borrar. <em>Volatile</em> le dice "esta escritura tiene efectos fuera del programa, hazla siempre y en este orden".</p>
+      <p>Y esto está simplificado: antes hay que activar el pin como salida (<code>GPIO_ENABLE_REG</code>) y decirle al <em>IO_MUX</em> que el pin lo controla el GPIO y no otro periférico. Por eso existe <code>esp-hal</code>: hace todo eso por ti, sin <code>unsafe</code> en tu código. Pero por debajo es exactamente esto.</p>
+
+      <!-- ─────────────── 2 ─────────────── -->
+      <h2 class="sec"><span class="k">2 · rust</span>Un programa sin sistema operativo</h2>
+      <p>En tu Mac, cuando ejecutas un programa, macOS lo carga, le da memoria, le pasa argumentos y, cuando <code>main</code> termina, recoge los restos. En el ESP32 no hay nadie. Tu código es lo único que corre.</p>
+
+      <figure>
+        <div class="scroll">
+        <svg viewBox="0 0 760 150" role="img" aria-label="Secuencia de arranque: al dar corriente arranca el bootloader de la ROM del chip, que carga el segundo bootloader desde la flash, que salta a tu función main, que se queda en un bucle infinito.">
+          <defs>
+            <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+          </defs>
+          <rect class="box-soft" x="10" y="40" width="120" height="60" rx="6"/>
+          <text x="70" y="66" text-anchor="middle">corriente</text>
+          <text x="70" y="84" text-anchor="middle" class="mut">o botón EN</text>
+
+          <line class="wire" x1="130" y1="70" x2="180" y2="70" marker-end="url(#ah2)"/>
+
+          <rect class="box" x="182" y="40" width="150" height="60" rx="6"/>
+          <text x="257" y="66" text-anchor="middle">bootloader ROM</text>
+          <text x="257" y="84" text-anchor="middle" class="mut">grabado de fábrica</text>
+
+          <line class="wire" x1="332" y1="70" x2="382" y2="70" marker-end="url(#ah2)"/>
+          <text x="357" y="60" text-anchor="middle" class="mut">carga</text>
+
+          <rect class="box" x="384" y="40" width="150" height="60" rx="6"/>
+          <text x="459" y="66" text-anchor="middle">2º bootloader</text>
+          <text x="459" y="84" text-anchor="middle" class="mut">flash · 0x1000</text>
+
+          <line class="wire" x1="534" y1="70" x2="584" y2="70" marker-end="url(#ah2)"/>
+          <text x="559" y="60" text-anchor="middle" class="mut">salta</text>
+
+          <rect class="box-cop" x="586" y="40" width="164" height="60" rx="6"/>
+          <text x="668" y="66" text-anchor="middle" class="cop">fn main() -&gt; !</text>
+          <text x="668" y="84" text-anchor="middle" class="mut">tu código</text>
+
+          <path class="wire-cop" d="M700,100 C700,136 636,136 636,100" marker-end="url(#ahc)"/>
+          <text x="668" y="146" text-anchor="middle" class="cop">loop { }</text>
+        </svg>
+        </div>
+        <figcaption>Del encendido a tu código. <code>espflash</code> graba el 2º bootloader y tu programa en la flash. Una vez en <code>main</code>, no hay vuelta atrás: la función nunca termina.</figcaption>
+      </figure>
+
+      <p>Abre <code>lecciones/01-blink/src/bin/main.rs</code>. Cada línea rara tiene su porqué:</p>
+      <div class="tablewrap">
+      <table class="lines">
+        <tr><td><code>#![no_std]</code></td><td>No usamos la biblioteca estándar: nada de ficheros, hilos, <code>Vec</code> ni <code>println!</code>, porque todo eso lo da un sistema operativo. Solo queda <code>core</code>: tipos, traits, <code>Option</code>, <code>Result</code>, iteradores.</td></tr>
+        <tr><td><code>#![no_main]</code></td><td>No hay runtime que llame a <code>main</code> por ti. El punto de entrada lo marca…</td></tr>
+        <tr><td><code>#[main]</code></td><td>…esta macro de <code>esp-hal</code>, que pone tu función donde el bootloader salta.</td></tr>
+        <tr><td><code>fn main() -&gt; !</code></td><td><code>!</code> es el tipo <em>never</em>: la función no devuelve jamás. Si devolviera, ¿a quién? No hay nadie. El compilador te obliga a acabar en un <code>loop</code>.</td></tr>
+        <tr><td><code>use esp_backtrace as _;</code></td><td>En <code>no_std</code> tú decides qué pasa en un <code>panic!</code>. Este crate imprime la traza por el serie y se para. El <code>as _</code> lo enlaza sin darle nombre.</td></tr>
+        <tr><td><code>esp_app_desc!()</code></td><td>Una cabecera que el 2º bootloader comprueba antes de saltar a tu código: versión, fecha, etc.</td></tr>
+        <tr><td><code>esp_hal::init(config)</code></td><td>Pone la CPU a 240 MHz y te entrega <strong>todos los periféricos del chip</strong>. Esto es lo importante de la siguiente sección.</td></tr>
+      </table>
+      </div>
+
+      <!-- ─────────────── 3 ─────────────── -->
+      <h2 class="sec"><span class="k">3 · rust</span>El ownership protege el hardware</h2>
+      <p>En el tema 1 viste que un pin es un bit compartido. Si dos partes de tu programa creen que controlan GPIO2, una lo enciende, la otra lo apaga, y el robot hace cosas que nadie ha escrito. En C esto se evita con disciplina. En Rust lo impide el compilador.</p>
+      <p><code>esp_hal::init</code> devuelve un struct <code>Peripherals</code> con un campo por cada periférico: <code>GPIO0</code>, <code>GPIO2</code>, <code>UART0</code>, <code>LEDC</code>… <strong>Solo existe uno de cada</strong> y solo se puede llamar a <code>init</code> una vez. Cuando le pasas <code>peripherals.GPIO2</code> a <code>Output::new</code>, lo <em>mueves</em>: ahora es de <code>led</code> y de nadie más.</p>
+
+      <figure>
+        <div class="scroll">
+        <svg viewBox="0 0 760 250" role="img" aria-label="esp_hal::init entrega un struct Peripherals con un único GPIO2. Output::new se lo lleva por movimiento a la variable led. Un segundo intento de usar peripherals.GPIO2 falla al compilar con el error E0382.">
+          <defs>
+            <marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+          </defs>
+          <rect class="box-soft" x="10" y="20" width="200" height="200" rx="6"/>
+          <text x="24" y="44">peripherals</text>
+          <text x="24" y="62" class="mut">: Peripherals</text>
+          <rect class="box" x="24" y="76" width="172" height="26" rx="3"/><text x="36" y="94" class="mut">GPIO0</text>
+          <rect class="box-cop" x="24" y="108" width="172" height="26" rx="3"/><text x="36" y="126" class="cop">GPIO2</text>
+          <rect class="box" x="24" y="140" width="172" height="26" rx="3"/><text x="36" y="158" class="mut">GPIO4</text>
+          <text x="36" y="186" class="mut">… UART0, LEDC, I2C0 …</text>
+
+          <!-- move -->
+          <line class="wire-cop" x1="196" y1="121" x2="330" y2="80" marker-end="url(#ahc)"/>
+          <text x="262" y="84" text-anchor="middle" class="cop">move</text>
+
+          <rect class="box-sig" x="332" y="50" width="250" height="60" rx="6"/>
+          <text x="346" y="75">let mut led = Output::new(</text>
+          <text x="346" y="95" class="cop">  peripherals.GPIO2, …)</text>
+
+          <!-- second attempt -->
+          <line class="wire-dash" x1="196" y1="121" x2="330" y2="170" marker-end="url(#ah3)"/>
+          <rect class="box" x="332" y="140" width="250" height="60" rx="6" stroke-dasharray="4 4"/>
+          <text x="346" y="165" class="mut">let otro = Output::new(</text>
+          <text x="346" y="185" class="mut">  peripherals.GPIO2, …)</text>
+          <line class="x" x1="252" y1="136" x2="276" y2="160"/>
+          <line class="x" x1="276" y1="136" x2="252" y2="160"/>
+
+          <text x="600" y="167" class="xt">error[E0382]</text>
+          <text x="600" y="185" class="xt">no compila</text>
+          <text x="600" y="75" class="sig">led es el único</text>
+          <text x="600" y="93" class="sig">dueño de GPIO2</text>
+        </svg>
+        </div>
+        <figcaption>Después del <em>move</em>, <code>peripherals.GPIO2</code> ya no existe para el resto del programa. Dos dueños del mismo pin es un error de compilación, no un bug que buscar con el robot en marcha.</figcaption>
+      </figure>
+
+      <p>Este es el error real que da tu toolchain si lo intentas (lo he compilado para comprobarlo):</p>
+<pre class="err"><code><span class="e">error[E0382]: use of moved value: `peripherals.GPIO2`</span>
+  --&gt; src/bin/main.rs:36:28
+   |
+35 |     let mut led = Output::new(peripherals.GPIO2, Level::Low, OutputConfig::default());
+   |                               ----------------- value moved here
+36 |     let otro = Output::new(peripherals.GPIO2, Level::Low, OutputConfig::default());
+   |                            ^^^^^^^^^^^^^^^^^ value used here after move
+   |
+   = note: move occurs because `peripherals.GPIO2` has type `GPIO2&lt;'_&gt;`,
+           which does not implement the `Copy` trait</code></pre>
+
+      <p>Fíjate en la última línea. <code>Copy</code> es un <strong>trait</strong>: una etiqueta que dice "este tipo se puede duplicar copiando sus bytes". Un <code>u32</code> lo tiene. <code>GPIO2</code> no lo tiene <em>a propósito</em>. Es tu primer contacto con los traits: aquí definen qué se le permite hacer a un tipo.</p>
+      <div class="note"><strong>Coste cero.</strong> <code>GPIO2</code> ocupa 0 bytes; lo he comprobado con <code>size_of</code>. No guarda nada en memoria: solo existe para que el compilador sepa quién tiene el pin. Toda esta seguridad desaparece al compilar y el binario es igual de pequeño que en C.</div>
+
+      <!-- ─────────────── 4 ─────────────── -->
+      <h2 class="sec"><span class="k">4 · tu turno</span>Haz que parpadee</h2>
+      <p>Ahora mismo el programa imprime <code>Hello world!</code> cada 500 ms. Conviértelo en un blink.</p>
+      <ol class="steps">
+        <li><div>Crea una salida sobre <code>GPIO2</code> con <code>Output::new</code>, empezando apagada. Lo importas de <code>esp_hal::gpio</code>.</div></li>
+        <li><div>Sustituye la espera activa (el <code>while</code> con <code>Instant</code>) por un <code>Delay</code> de <code>esp_hal::delay</code>. Quita los <code>use</code> que dejen de hacer falta: el compilador te avisará.</div></li>
+        <li><div>En el <code>loop</code>: cambia el estado del LED, imprime con <code>info!</code> si ha quedado encendido o apagado, y espera 500 ms.</div></li>
+        <li><div>Compila y flashea desde la carpeta de la lección:
+<pre class="term"><code>cd ~/code/test_esp32/lecciones/01-blink
+cargo run --release</code></pre>
+          <code>cargo run</code> compila y lanza <code>espflash flash --monitor</code> (está configurado en <code>.cargo/config.toml</code>). En el monitor, <kbd>Ctrl</kbd>+<kbd>R</kbd> reinicia la placa y <kbd>Ctrl</kbd>+<kbd>C</kbd> sale.</div></li>
+      </ol>
+
+      <details><summary>Pista 1 · cómo se construye un Output</summary><div class="in">
+        <p><code>Output::new(pin, nivel_inicial, configuración)</code>. El nivel es <code>Level::Low</code> o <code>Level::High</code>. Para la configuración vale <code>OutputConfig::default()</code>. La variable tiene que ser <code>mut</code>: cambiar el pin modifica el <code>Output</code>.</p>
+      </div></details>
+      <details><summary>Pista 2 · qué se le puede pedir a un Output</summary><div class="in">
+        <p>Hay <code>set_high()</code>, <code>set_low()</code> y <code>toggle()</code>. Para saber cómo está, <code>output_level()</code> devuelve un <code>Level</code>. <code>Level</code> implementa <code>Debug</code>, así que puedes imprimirlo con <code>{:?}</code>.</p>
+      </div></details>
+      <details><summary>Pista 3 · esperar</summary><div class="in">
+        <p><code>let delay = Delay::new();</code> fuera del bucle y <code>delay.delay_millis(500);</code> dentro. Por dentro es también una espera activa: la CPU da vueltas mirando un contador. En la lección 7 veremos cómo esperar sin gastar CPU.</p>
+      </div></details>
+
+      <h3>Si terminas pronto</h3>
+      <p><strong>a)</strong> Haz que el LED diga SOS en morse: tres cortos, tres largos, tres cortos. <strong>b)</strong> Intenta usar <code>GPIO2</code> dos veces y lee el error tú mismo. <strong>c)</strong> Mete un <code>panic!("adiós")</code> después de 10 parpadeos y mira qué imprime <code>esp_backtrace</code>.</p>
+
+      <div class="ask">
+        <p><strong>Cuando lo tengas</strong> (o te atasques), dímelo en el chat. Leo tu <code>main.rs</code>, flasheo, miro el monitor serie y te comento. Si el LED no se enciende pero el monitor sí imprime, dímelo también: puede que tu placa tenga el LED en otro pin, o que no tenga LED de usuario.</p>
+      </div>
+
+      <!-- ─────────────── 5 ─────────────── -->
+      <h2 class="sec"><span class="k">5 · repaso</span>Comprueba que lo has entendido</h2>
+      <p>Intenta responder antes de abrir.</p>
+      <details><summary>¿Por qué <code>main</code> devuelve <code>!</code> y no <code>()</code>?</summary><div class="in">
+        <p>Porque no hay nadie a quien devolver el control: ni sistema operativo ni runtime. Si <code>main</code> terminara, la CPU seguiría ejecutando lo que hubiera detrás en memoria. Con <code>!</code>, el compilador garantiza que eso no ocurre.</p>
+      </div></details>
+      <details><summary>¿Qué problema evita escribir en <code>W1TS</code> en vez de en <code>GPIO_OUT</code>?</summary><div class="in">
+        <p>La carrera de leer, modificar y escribir. Con <code>GPIO_OUT</code> haces tres pasos, y otro núcleo o una interrupción puede colarse en medio y perder su cambio. <code>W1TS</code> es una sola escritura que solo toca los bits a 1.</p>
+      </div></details>
+      <details><summary>¿Qué haría el optimizador con un <code>*ptr = x</code> normal en un registro?</summary><div class="in">
+        <p>Podría borrarlo si nadie lee <code>ptr</code> después, o juntar dos escrituras seguidas en una. Para él es memoria normal. <code>write_volatile</code> garantiza que cada escritura ocurre, en orden.</p>
+      </div></details>
+      <details><summary>Si <code>GPIO2</code> ocupa 0 bytes, ¿qué "mueves" cuando haces <code>Output::new(peripherals.GPIO2, …)</code>?</summary><div class="in">
+        <p>Nada físico: mueves el <em>permiso</em>. El move es una regla del compilador, no una copia de datos. Por eso la seguridad no cuesta nada en tiempo de ejecución.</p>
+      </div></details>
+
+      <footer>Lección 01 · actualizada el 23-sep-2026 · código en <code>lecciones/01-blink</code></footer>
+    </main>
+  </div>
+</div>
